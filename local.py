@@ -1,6 +1,4 @@
 import os
-import time
-import csv
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -8,17 +6,11 @@ import torch
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.optim
-
-from torchvision import transforms
-
-import cv2
-
-from PIL import Image
-
 cudnn.benchmark = True
 
-from metrics import AverageMeter, Result
-import models
+from PIL import Image
+import cv2
+
 import utils
 
 args = utils.parse_command()
@@ -52,15 +44,15 @@ def run_single(model, image_path):
 
     output_img_rescaled = rescale(output_img)
 
-    output_dir = os.path.join(os.path.dirname(args.image), "depth_preds")
+    output_dir = os.path.dirname(args.image)
     os.makedirs(output_dir, exist_ok=True)
 
     # Create the save path in the "depth_preds" directory
     file_name = os.path.splitext(os.path.basename(args.image))[0]
     save_path = os.path.join(output_dir, file_name)
 
-    if cv2.imwrite(save_path + ".png", output_img_rescaled):
-        print(f"## Image successfully saved to {save_path}.png")
+    if cv2.imwrite(save_path + "_pred.png", output_img_rescaled):
+        print(f"## Image successfully saved to {save_path}_pred.png")
     else:
         print("*** Error *** Image not saved...")
 

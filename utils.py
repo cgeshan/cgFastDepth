@@ -59,8 +59,8 @@ def parse_command():
     parser.add_argument(
         "-r",
         "--run",
-        required=False,  # Set to True if you want to make the argument mandatory
-        metavar="RUN_OPTION",
+        required=False,
+        action="store_true",
         help="Specify a run option"
     )
     parser.add_argument(
