@@ -51,8 +51,7 @@ def parse_command():
         help="print frequency (default: 50)",
     )
     parser.add_argument(
-        "-e",
-        "--evaluate",
+        "--model",
         default="",
         type=str,
         metavar="PATH",
@@ -60,9 +59,23 @@ def parse_command():
     parser.add_argument(
         "-r",
         "--run",
-        default="",
+        required=False,  # Set to True if you want to make the argument mandatory
+        metavar="RUN_OPTION",
+        help="Specify a run option"
+    )
+    parser.add_argument(
+        '-i',
+        '--image',
         type=str,
-        metavar="PATH",
+        required=False,
+        help="Path to image JPG or PNG."
+    )
+    parser.add_argument(
+        '-f',
+        '--folder',
+        type=str,
+        required=False,
+        help="Path to image folder JPG or PNG."
     )
 
     parser.add_argument("--gpu", default="0", type=str, metavar="N", help="gpu id")
