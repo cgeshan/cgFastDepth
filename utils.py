@@ -57,25 +57,24 @@ def parse_command():
         metavar="PATH",
     )
     parser.add_argument(
-        "-r",
-        "--run",
-        required=False,
-        action="store_true",
-        help="Specify a run option"
+        "-r", "--run", required=False, action="store_true", help="Specify a run option"
     )
     parser.add_argument(
-        '-i',
-        '--image',
-        type=str,
-        required=False,
-        help="Path to image JPG or PNG."
+        "-i", "--image", type=str, required=False, help="Path to image JPG or PNG."
     )
     parser.add_argument(
-        '-f',
-        '--folder',
+        "-f",
+        "--folder",
         type=str,
         required=False,
-        help="Path to image folder JPG or PNG."
+        help="Path to image folder JPG or PNG.",
+    )
+    parser.add_argument(
+        "--cam",
+        type=str,
+        required=True,
+        metavar="CAMERA_CONFIG",
+        help="Path to YAML file with camera configuration",
     )
 
     parser.add_argument("--gpu", default="0", type=str, metavar="N", help="gpu id")
