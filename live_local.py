@@ -1,23 +1,15 @@
-# python local.py --model ../../results/mobilenet-nnconv5dw-skipadd-pruned.pth.tar
-# --folder ../sequences/rgbd_dataset_freiburg1_room/rgb
-# --cam ../Examples/RGB-D/TUM1.yaml --run
-
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-
 import torch
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.optim
-
-cudnn.benchmark = True
-
-from PIL import Image
 import cv2
+from PIL import Image
 import yaml
-
 import utils
+import time
 
 args = utils.parse_command()
 print(args)
@@ -53,58 +45,42 @@ def rescale(depth, d_min=None, d_max=None):
     return depth_relative
 
 
-def run_single(model, image_path, camera_wid, camera_hei, is_folder=False):
+def run_single(model, frame, camera_wid, camera_hei, is_folder=False):
     device = torch.device("cuda:0")
     model.eval()
     model.to(device)
 
-    img = cv2.imread(image_path)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    frame = cv2.resize(frame, (camera_wid, camera_hei))
+    img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-    rgb_array = np.array(
-        Image.fromarray(img).resize((camera_wid, camera_hei), Image.BILINEAR)
-    ).astype(np.double)
-    rgb_array /= 255
+    rgb_array = np.array(img).astype(np.double) / 255.0
     input = np.zeros([1, 3, camera_hei, camera_wid], dtype=np.float32)
     input[0, :, :, :] = np.transpose(rgb_array, (2, 0, 1))
     input = torch.from_numpy(input).to(device)
+
+    start_time = time.time()
     result = model(input)
+    elapsed_time = time.time() - start_time
+
     output_img = np.squeeze(result.data.cpu().numpy())
-    # print(output_img)
-    # output_img_rescaled = rescale(output_img)
+    output_img_rescaled = rescale(output_img)
 
-    if not is_folder:
-        plt.imshow(output_img)
-        plt.show()
+    fps = 1.0 / elapsed_time
+    fps_text = f"FPS: {fps:.2f}"  # Text to display FPS
 
-    file_name = os.path.splitext(os.path.basename(image_path))[0]
+    # Add FPS text overlay on the depth estimation window
+    cv2.putText(
+        output_img_rescaled,
+        fps_text,
+        (10, 30),  # Coordinates to display text
+        cv2.FONT_HERSHEY_SIMPLEX,
+        1,
+        (255, 255, 255),  # Text color (white)
+        2,  # Font thickness
+        cv2.LINE_AA,
+    )
 
-    if not is_folder:
-        output_dir = os.path.dirname(image_path)
-        os.makedirs(output_dir, exist_ok=True)
-        save_path = os.path.join(output_dir, f"{file_name}_pred.tiff")
-
-    else:
-        output_dir = os.path.join(os.path.dirname(args.folder), "depth_preds")
-        os.makedirs(output_dir, exist_ok=True)
-        save_path = os.path.join(output_dir, f"{file_name}.tiff")
-
-    if cv2.imwrite(save_path, output_img):
-        print(f"## Image successfully saved to {save_path}")
-    else:
-        print("*** Error *** Image not saved...")
-
-
-def run_folder(model, folder_path, output_dir, camera_wid, camera_hei):
-    device = torch.device("cuda:0")
-    model.eval()
-    model.to(device)
-
-    for filename in os.listdir(folder_path):
-        if filename.endswith(".jpg") or filename.endswith(".png"):
-            image_path = os.path.join(folder_path, filename)
-            print(image_path)
-            run_single(model, image_path, camera_wid, camera_hei, is_folder=True)
+    return output_img_rescaled
 
 
 def main():
@@ -120,7 +96,6 @@ def main():
         camera_wid = 224
         camera_hei = 224
         print(f"Camera width: {camera_wid}, Camera height: {camera_hei}")
-        # return
 
     print("\n## Attempting to load model...\n\n")
     if args.model:
@@ -140,16 +115,26 @@ def main():
 
         output_dir = os.path.dirname(args.model)
 
-        if args.run:
-            if args.image:
-                print("\n## Running depth estimation on image...")
-                run_single(model, args.image, camera_wid, camera_hei)
+        cap = cv2.VideoCapture(0)
 
-            elif args.folder:
-                print(
-                    "\n## Running depth estimation on images in the specified folder..."
-                )
-                run_folder(model, args.folder, output_dir, camera_wid, camera_hei)
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                print("Error: Couldn't read frame from webcam.")
+                break
+
+            estimation = run_single(
+                model, frame, camera_wid, camera_hei, is_folder=True
+            )
+
+            cv2.imshow("Webcam Feed", frame)
+            cv2.imshow("Depth Estimation", estimation)
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
+
+        cap.release()
+        cv2.destroyAllWindows()
+
         return
 
 

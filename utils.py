@@ -7,6 +7,7 @@ from PIL import Image
 import math
 
 cmap = plt.cm.viridis
+counter = 0
 
 
 def parse_command():
@@ -52,6 +53,13 @@ def parse_command():
     )
     parser.add_argument(
         "--model",
+        default="",
+        type=str,
+        metavar="PATH",
+    )
+    parser.add_argument(
+        "-e",
+        "--evaluate",
         default="",
         type=str,
         metavar="PATH",
