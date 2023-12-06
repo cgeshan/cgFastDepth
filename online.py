@@ -1,8 +1,5 @@
-# python local.py --model ../../results/mobilenet-nnconv5dw-skipadd-pruned.pth.tar
-# --folder ../sequences/rgbd_dataset_freiburg1_room/rgb
-# --cam ../Examples/RGB-D/TUM1.yaml --run
-
 import os
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -14,8 +11,11 @@ import torch.optim
 cudnn.benchmark = True
 
 from PIL import Image
+from datetime import datetime
+from natsort import natsorted 
 import cv2
 import yaml
+import time
 
 import utils
 
@@ -31,10 +31,12 @@ def parse_camera_config(config_path):
             yaml_content = "".join(lines)
             camera_config = yaml.safe_load(yaml_content)
 
-            if "Camera.width" in camera_config and "Camera.height" in camera_config:
+            if "Camera.width" in camera_config and "Camera.height" in camera_config and "Camera.fps" in camera_config:
                 camera_wid = camera_config["Camera.width"]
                 camera_hei = camera_config["Camera.height"]
-                return camera_wid, camera_hei
+                camera_fps = camera_config["Camera.fps"]
+
+                return camera_wid, camera_hei, camera_fps
 
             else:
                 print("Error: Missing Camera.width or Camera.height in the YAML file.")
@@ -70,55 +72,49 @@ def run_single(model, image_path, camera_wid, camera_hei, is_folder=False):
     input = torch.from_numpy(input).to(device)
     result = model(input)
     output_img = np.squeeze(result.data.cpu().numpy())
-    # print(output_img)
     output_img_rescaled = (output_img * (256 / np.max(output_img))).astype(np.uint8)
 
-    if not is_folder:
-        plt.imshow(output_img)
-        plt.show()
-
-    file_name = os.path.splitext(os.path.basename(image_path))[0]
-
-    if not is_folder:
-        output_dir = os.path.dirname(image_path)
-        os.makedirs(output_dir, exist_ok=True)
-        save_path = os.path.join(output_dir, f"{file_name}_pred.tiff")
-
-    else:
-        output_dir = os.path.join(os.path.dirname(args.folder), "depth_preds")
-        os.makedirs(output_dir, exist_ok=True)
-        save_path = os.path.join(output_dir, f"{file_name}.png")
-
-    if cv2.imwrite(save_path, output_img_rescaled):
-        print(f"## Image successfully saved to {save_path}")
-    else:
-        print("*** Error *** Image not saved...")
+    return img, output_img_rescaled
 
 
-def run_folder(model, folder_path, output_dir, camera_wid, camera_hei):
+def run_folder(model, folder_path, output_dir, camera_wid, camera_hei, camera_fps, fifo):
     device = torch.device("cuda:0")
     model.eval()
     model.to(device)
 
-    for filename in os.listdir(folder_path):
-        if filename.endswith(".jpg") or filename.endswith(".png"):
-            image_path = os.path.join(folder_path, filename)
-            print(image_path)
-            run_single(model, image_path, camera_wid, camera_hei, is_folder=True)
+    all_files = os.listdir(folder_path)
+    image_files = [file for file in all_files if file.lower().endswith(('.jpg', '.jpeg', '.png'))]
+    sorted_files = natsorted(image_files, key=lambda x: datetime.utcfromtimestamp(float(x.split('.')[0])).strftime('%Y%m%d_%H%M%S.%f'))
 
+    for filename in sorted_files:
+        image_path = os.path.join(folder_path, filename)
+        rgb, depth = run_single(model, image_path, camera_wid, camera_hei, is_folder=True)
+
+        fifo.write(rgb.tobytes())
+        fifo.write(depth.tobytes())
+
+        time.sleep(1/camera_fps)
 
 def main():
     global args, output_dir
 
+    fifo_path = "Custom/data_stream"
+    if not os.path.exists(fifo_path):
+        fifo_path = "../Custom/data_stream"
+        if not os.path.exists(fifo_path):
+            print("\n\n*** ERROR *** Cannot find named pipe, make sure it exists. Checked Custom/data_stream, ../Custom/data_stream")
+            sys.exit(1)
+
     camera_config_result = parse_camera_config(args.cam)
 
     if camera_config_result is not None:
-        camera_wid, camera_hei = camera_config_result
+        camera_wid, camera_hei, camera_fps = camera_config_result
         print(f"Camera width: {camera_wid}, Camera height: {camera_hei}")
     else:
         print("Error: Unable to obtain camera configuration. Setting defaults...")
         camera_wid = 224
         camera_hei = 224
+        camera_fps = 1
         print(f"Camera width: {camera_wid}, Camera height: {camera_hei}")
         # return
 
@@ -140,16 +136,19 @@ def main():
 
         output_dir = os.path.dirname(args.model)
 
-        if args.run:
-            if args.image:
-                print("\n## Running depth estimation on image...")
-                run_single(model, args.image, camera_wid, camera_hei)
+        with open(fifo_path, "wb") as fifo:
+            if args.run:
+                if args.folder:
+                    print(
+                        "\n## Running depth estimation for online SLAM..."
+                    )
+                    run_folder(model, args.folder, output_dir, camera_wid, camera_hei, camera_fps, fifo)
 
-            elif args.folder:
-                print(
-                    "\n## Running depth estimation on images in the specified folder..."
-                )
-                run_folder(model, args.folder, output_dir, camera_wid, camera_hei)
+                terminate_signal = "terminate"
+                fifo.write(terminate_signal.encode("utf-8"))
+                print("terminate sent")
+
+                fifo.close()
         return
 
 
