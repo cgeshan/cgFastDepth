@@ -71,7 +71,7 @@ def run_single(model, image_path, camera_wid, camera_hei, is_folder=False):
     result = model(input)
     output_img = np.squeeze(result.data.cpu().numpy())
     # print(output_img)
-    output_img_rescaled = (output_img * (256 / np.max(output_img))).astype(np.uint8)
+    output_img_rescaled = (output_img * (65536 / np.max(output_img))).astype(np.uint16)
 
     if not is_folder:
         plt.imshow(output_img)
@@ -82,7 +82,7 @@ def run_single(model, image_path, camera_wid, camera_hei, is_folder=False):
     if not is_folder:
         output_dir = os.path.dirname(image_path)
         os.makedirs(output_dir, exist_ok=True)
-        save_path = os.path.join(output_dir, f"{file_name}_pred.tiff")
+        save_path = os.path.join(output_dir, f"{file_name}_pred.png")
 
     else:
         output_dir = os.path.join(os.path.dirname(args.folder), "depth_preds")

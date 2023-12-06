@@ -1,3 +1,6 @@
+# sample run command
+# python cgFastDepth/online.py --model ../results/mobilenet-nnconv5dw-skipadd-pruned.pth.tar --cam Examples/RGB-D/TUM2.yaml --folder sequences/rgbd_dataset_freiburg2_xyz/rgb --run
+
 import os
 import sys
 import numpy as np

@@ -1,15 +1,20 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+
 import torch
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.optim
-import cv2
+
+cudnn.benchmark = True
+
 from PIL import Image
+import cv2
 import yaml
+
 import utils
-import time
+
 
 args = utils.parse_command()
 print(args)
@@ -66,17 +71,16 @@ def run_single(model, frame, camera_wid, camera_hei, is_folder=False):
     output_img_rescaled = rescale(output_img)
 
     fps = 1.0 / elapsed_time
-    fps_text = f"FPS: {fps:.2f}"  # Text to display FPS
+    fps_text = f"FPS: {fps:.2f}"
 
-    # Add FPS text overlay on the depth estimation window
     cv2.putText(
         output_img_rescaled,
         fps_text,
-        (10, 30),  # Coordinates to display text
+        (10, 30),  
         cv2.FONT_HERSHEY_SIMPLEX,
         1,
-        (255, 255, 255),  # Text color (white)
-        2,  # Font thickness
+        (255, 255, 255),  
+        2,
         cv2.LINE_AA,
     )
 
