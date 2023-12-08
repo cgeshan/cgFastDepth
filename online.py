@@ -60,16 +60,16 @@ def run_single(model, image_path, camera_wid, camera_hei, is_folder=False):
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     rgb_array = np.array(
-        Image.fromarray(img).resize((camera_wid, camera_hei), Image.BILINEAR)
+        Image.fromarray(img).resize((224, 224), Image.BILINEAR)
     ).astype(np.double)
     rgb_array /= 255
-    input = np.zeros([1, 3, camera_hei, camera_wid], dtype=np.float32)
+    input = np.zeros([1, 3, 224, 224], dtype=np.float32)
     input[0, :, :, :] = np.transpose(rgb_array, (2, 0, 1))
     input = torch.from_numpy(input).to(device)
     result = model(input)
-    output_img = np.squeeze(result.data.cpu().numpy())
-
-    return img, output_img
+    output_img = np.squeeze(result.data.cpu().numpy()).copy()
+    output_img_resized = cv2.resize(output_img, (camera_wid, camera_hei))
+    return img, output_img_resized
 
 
 def run_folder(model, folder_path, output_dir, camera_wid, camera_hei, camera_fps, fifo):
@@ -90,7 +90,7 @@ def run_folder(model, folder_path, output_dir, camera_wid, camera_hei, camera_fp
 
         time.sleep(1/camera_fps)
 
-def run_from_txt(model, txt_file_path, output_dir, camera_wid, camera_hei, camera_fps, fifo):
+def run_from_txt(model, txt_file_path, camera_wid, camera_hei, fifo):
     device = torch.device("cuda:0")
     model.eval()
     model.to(device)
@@ -108,32 +108,22 @@ def run_from_txt(model, txt_file_path, output_dir, camera_wid, camera_hei, camer
         fifo.write(rgb.tobytes())
         fifo.write(depth.tobytes())
 
-        time.sleep(1/camera_fps)
-
 def main():
     global args, output_dir
-
-    fifo_path = "Custom/data_stream"
-    if not os.path.exists(fifo_path):
-        fifo_path = "../Custom/data_stream"
-        if not os.path.exists(fifo_path):
-            print("\n\n*** ERROR *** Cannot find named pipe, make sure it exists. Checked Custom/data_stream, ../Custom/data_stream")
-            sys.exit(1)
 
     camera_config_result = parse_camera_config(args.cam)
 
     if camera_config_result is not None:
         camera_wid, camera_hei, camera_fps = camera_config_result
-        print(f"Camera width: {camera_wid}, Camera height: {camera_hei}")
+        print(f"\nCamera width: {camera_wid}, Camera height: {camera_hei}")
     else:
-        print("Error: Unable to obtain camera configuration. Setting defaults...")
+        print("\nError: Unable to obtain camera configuration. Setting defaults...")
         camera_wid = 224
         camera_hei = 224
         camera_fps = 1
         print(f"Camera width: {camera_wid}, Camera height: {camera_hei}")
-        # return
 
-    print("\n## Attempting to load model...\n\n")
+    print("\n## Attempting to load model...\n")
     if args.model:
         assert os.path.isfile(args.model), f"=> no model found at '{args.model}'"
         print(f"=> loading model '{args.model}'")
@@ -151,8 +141,14 @@ def main():
 
         output_dir = os.path.dirname(args.model)
 
+        fifo_path = "Custom/data_stream"
+        if not os.path.exists(fifo_path):
+            fifo_path = "../Custom/data_stream"
+            if not os.path.exists(fifo_path):
+                print("\n\n*** ERROR *** Cannot find named pipe, make sure it exists. Checked Custom/data_stream, ../Custom/data_stream")
+                sys.exit(1)
+
         with open(fifo_path, "wb") as fifo:
-            
             if args.run:
                 if args.folder:
                     print(
@@ -163,7 +159,7 @@ def main():
                 elif args.txt:
                     t0 = time.time()
                     print("\n## Running depth estimation for online SLAM using images from a txt file...")
-                    run_from_txt(model, args.txt, output_dir, camera_wid, camera_hei, camera_fps, fifo)
+                    run_from_txt(model, args.txt, camera_wid, camera_hei, fifo)
                     print(f"\n## Runtime: {time.time() - t0} seconds")
                 
                 terminate_signal = "terminate"
