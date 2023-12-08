@@ -51,13 +51,6 @@ def parse_camera_config(config_path):
         print(f"Error parsing YAML file: {e}")
 
 
-def rescale(depth, d_min=None, d_max=None):
-    d_min = min(np.min(depth), np.min(depth))
-    d_max = max(np.max(depth), np.max(depth))
-    depth_relative = (depth - d_min) / (d_max - d_min)
-    return depth_relative
-
-
 def run_single(model, image_path, camera_wid, camera_hei, is_folder=False):
     device = torch.device("cuda:0")
     model.eval()
@@ -75,9 +68,8 @@ def run_single(model, image_path, camera_wid, camera_hei, is_folder=False):
     input = torch.from_numpy(input).to(device)
     result = model(input)
     output_img = np.squeeze(result.data.cpu().numpy())
-    output_img_rescaled = (output_img * (256 / np.max(output_img))).astype(np.uint8)
 
-    return img, output_img_rescaled
+    return img, output_img
 
 
 def run_folder(model, folder_path, output_dir, camera_wid, camera_hei, camera_fps, fifo):
@@ -91,6 +83,26 @@ def run_folder(model, folder_path, output_dir, camera_wid, camera_hei, camera_fp
 
     for filename in sorted_files:
         image_path = os.path.join(folder_path, filename)
+        rgb, depth = run_single(model, image_path, camera_wid, camera_hei, is_folder=True)
+
+        fifo.write(rgb.tobytes())
+        fifo.write(depth.tobytes())
+
+        time.sleep(1/camera_fps)
+
+def run_from_txt(model, txt_file_path, output_dir, camera_wid, camera_hei, camera_fps, fifo):
+    device = torch.device("cuda:0")
+    model.eval()
+    model.to(device)
+
+    txt_file_path = f"{txt_file_path}timestamps.txt"
+
+    with open(txt_file_path, 'r') as file:
+        rgb_file_paths = file.read().splitlines()
+        # print(rgb_file_paths)
+
+    for rgb_file_path in rgb_file_paths:
+        image_path = os.path.join(args.txt, f"rgb/{rgb_file_path}.png")
         rgb, depth = run_single(model, image_path, camera_wid, camera_hei, is_folder=True)
 
         fifo.write(rgb.tobytes())
@@ -140,13 +152,20 @@ def main():
         output_dir = os.path.dirname(args.model)
 
         with open(fifo_path, "wb") as fifo:
+            
             if args.run:
                 if args.folder:
                     print(
                         "\n## Running depth estimation for online SLAM..."
                     )
                     run_folder(model, args.folder, output_dir, camera_wid, camera_hei, camera_fps, fifo)
-
+                
+                elif args.txt:
+                    t0 = time.time()
+                    print("\n## Running depth estimation for online SLAM using images from a txt file...")
+                    run_from_txt(model, args.txt, output_dir, camera_wid, camera_hei, camera_fps, fifo)
+                    print(f"\n## Runtime: {time.time() - t0} seconds")
+                
                 terminate_signal = "terminate"
                 fifo.write(terminate_signal.encode("utf-8"))
                 print("terminate sent")

@@ -1,6 +1,4 @@
-# python local.py --model ../../results/mobilenet-nnconv5dw-skipadd-pruned.pth.tar
-# --folder ../sequences/rgbd_dataset_freiburg1_room/rgb
-# --cam ../Examples/RGB-D/TUM1.yaml --run
+# python local.py --model ../../results/mobilenet-nnconv5dw-skipadd-pruned.pth.tar --folder ../sequences/rgbd_dataset_freiburg1_room/rgb --cam ../Examples/RGB-D/TUM1.yaml --run
 
 import os
 import numpy as np
@@ -16,6 +14,7 @@ cudnn.benchmark = True
 from PIL import Image
 import cv2
 import yaml
+import time
 
 import utils
 
@@ -70,8 +69,6 @@ def run_single(model, image_path, camera_wid, camera_hei, is_folder=False):
     input = torch.from_numpy(input).to(device)
     result = model(input)
     output_img = np.squeeze(result.data.cpu().numpy())
-    # print(output_img)
-    output_img_rescaled = (output_img * (65536 / np.max(output_img))).astype(np.uint16)
 
     if not is_folder:
         plt.imshow(output_img)
@@ -87,10 +84,11 @@ def run_single(model, image_path, camera_wid, camera_hei, is_folder=False):
     else:
         output_dir = os.path.join(os.path.dirname(args.folder), "depth_preds")
         os.makedirs(output_dir, exist_ok=True)
-        save_path = os.path.join(output_dir, f"{file_name}.png")
+        save_path = os.path.join(output_dir, f"{file_name}.tiff")
 
-    if cv2.imwrite(save_path, output_img_rescaled):
-        print(f"## Image successfully saved to {save_path}")
+    if cv2.imwrite(save_path, output_img):
+        # print(f"## Image successfully saved to {save_path}")
+        pass
     else:
         print("*** Error *** Image not saved...")
 
@@ -103,12 +101,13 @@ def run_folder(model, folder_path, output_dir, camera_wid, camera_hei):
     for filename in os.listdir(folder_path):
         if filename.endswith(".jpg") or filename.endswith(".png"):
             image_path = os.path.join(folder_path, filename)
-            print(image_path)
+            # print(image_path)
             run_single(model, image_path, camera_wid, camera_hei, is_folder=True)
 
 
 def main():
     global args, output_dir
+    t0 = time.time()
 
     camera_config_result = parse_camera_config(args.cam)
 
@@ -150,7 +149,9 @@ def main():
                     "\n## Running depth estimation on images in the specified folder..."
                 )
                 run_folder(model, args.folder, output_dir, camera_wid, camera_hei)
-        return
+    
+    t_end = time.time()
+    print(f"Total runtime: {t_end - t0}")
 
 
 if __name__ == "__main__":

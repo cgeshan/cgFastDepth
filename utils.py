@@ -78,6 +78,12 @@ def parse_command():
         help="Path to image folder JPG or PNG.",
     )
     parser.add_argument(
+        "--txt",
+        type=str,
+        required=False,
+        help="Path to list of images.",
+    )
+    parser.add_argument(
         "--cam",
         type=str,
         required=True,
