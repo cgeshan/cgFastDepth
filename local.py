@@ -61,14 +61,19 @@ def run_single(model, image_path, camera_wid, camera_hei, is_folder=False):
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     rgb_array = np.array(
-        Image.fromarray(img).resize((camera_wid, camera_hei), Image.BILINEAR)
+        Image.fromarray(img).resize((224, 224), Image.BILINEAR)
     ).astype(np.double)
     rgb_array /= 255
-    input = np.zeros([1, 3, camera_hei, camera_wid], dtype=np.float32)
+    input = np.zeros([1, 3, 224, 224], dtype=np.float32)
     input[0, :, :, :] = np.transpose(rgb_array, (2, 0, 1))
     input = torch.from_numpy(input).to(device)
+    start_time = time.time()
     result = model(input)
-    output_img = np.squeeze(result.data.cpu().numpy())
+    elapsed_time = time.time() - start_time
+    output_img = np.squeeze(result.data.cpu().numpy()).copy()
+    output_img_resized = cv2.resize(output_img, (camera_wid, camera_hei))
+
+    fps = 1.0 / elapsed_time
 
     if not is_folder:
         plt.imshow(output_img)
@@ -86,11 +91,13 @@ def run_single(model, image_path, camera_wid, camera_hei, is_folder=False):
         os.makedirs(output_dir, exist_ok=True)
         save_path = os.path.join(output_dir, f"{file_name}.tiff")
 
-    if cv2.imwrite(save_path, output_img):
+    if cv2.imwrite(save_path, output_img_resized):
         # print(f"## Image successfully saved to {save_path}")
         pass
     else:
         print("*** Error *** Image not saved...")
+
+    return fps
 
 
 def run_folder(model, folder_path, output_dir, camera_wid, camera_hei):
@@ -98,11 +105,20 @@ def run_folder(model, folder_path, output_dir, camera_wid, camera_hei):
     model.eval()
     model.to(device)
 
+    fps_sum = 0.0
+    frame_count = 0
+
     for filename in os.listdir(folder_path):
         if filename.endswith(".jpg") or filename.endswith(".png"):
             image_path = os.path.join(folder_path, filename)
             # print(image_path)
-            run_single(model, image_path, camera_wid, camera_hei, is_folder=True)
+            fps = run_single(model, image_path, camera_wid, camera_hei, is_folder=True)
+
+            fps_sum += fps
+            frame_count += 1
+
+            avg_fps = fps_sum / frame_count
+    print(avg_fps)
 
 
 def main():

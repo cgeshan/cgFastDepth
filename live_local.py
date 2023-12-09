@@ -12,6 +12,7 @@ cudnn.benchmark = True
 from PIL import Image
 import cv2
 import yaml
+import time
 
 import utils
 
@@ -84,7 +85,7 @@ def run_single(model, frame, camera_wid, camera_hei, is_folder=False):
         cv2.LINE_AA,
     )
 
-    return output_img_rescaled
+    return output_img_rescaled, fps
 
 
 def main():
@@ -121,14 +122,52 @@ def main():
 
         cap = cv2.VideoCapture(0)
 
+        # Get the webcam's resolution
+        default_camera_wid = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        default_camera_hei = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        start_time = time.time()
+        fps_sum = 0.0
+        frame_count = 0
+
         while True:
             ret, frame = cap.read()
             if not ret:
                 print("Error: Couldn't read frame from webcam.")
                 break
 
-            estimation = run_single(
-                model, frame, camera_wid, camera_hei, is_folder=True
+            estimation, fps = run_single(
+                model, frame, default_camera_wid, default_camera_hei, is_folder=True
+            )
+
+            fps_sum += fps
+            frame_count += 1
+
+            avg_fps = fps_sum / frame_count
+            avg_fps_text = f"Avg FPS: {avg_fps:.2f}"
+
+            resolution_text = f"Resolution: {default_camera_wid} x {default_camera_hei}"
+
+            cv2.putText(
+                estimation,
+                avg_fps_text,
+                (10, 60),  # Adjusted text position
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1,
+                (255, 255, 255),
+                2,
+                cv2.LINE_AA,
+            )
+
+            cv2.putText(
+                estimation,
+                resolution_text,
+                (10, 90),  # Adjusted text position
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1,
+                (255, 255, 255),
+                2,
+                cv2.LINE_AA,
             )
 
             cv2.imshow("Webcam Feed", frame)
@@ -138,8 +177,6 @@ def main():
 
         cap.release()
         cv2.destroyAllWindows()
-
-        return
 
 
 if __name__ == "__main__":
