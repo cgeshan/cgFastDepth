@@ -49,7 +49,7 @@ def rescale(depth, d_min=None, d_max=None):
     d_min = min(np.min(depth), np.min(depth))
     d_max = max(np.max(depth), np.max(depth))
     depth_relative = (depth - d_min) / (d_max - d_min)
-    return depth_relative
+    return depth_relative * 255
 
 
 def run_single(model, image_path, camera_wid, camera_hei, is_folder=False):
@@ -72,6 +72,7 @@ def run_single(model, image_path, camera_wid, camera_hei, is_folder=False):
     elapsed_time = time.time() - start_time
     output_img = np.squeeze(result.data.cpu().numpy()).copy()
     output_img_resized = cv2.resize(output_img, (camera_wid, camera_hei))
+    save_img = rescale(output_img_resized)
 
     fps = 1.0 / elapsed_time
 
@@ -81,21 +82,39 @@ def run_single(model, image_path, camera_wid, camera_hei, is_folder=False):
 
     file_name = os.path.splitext(os.path.basename(image_path))[0]
 
-    if not is_folder:
-        output_dir = os.path.dirname(image_path)
-        os.makedirs(output_dir, exist_ok=True)
-        save_path = os.path.join(output_dir, f"{file_name}_pred.png")
+    if args.rescale:
+        if not is_folder:
+            output_dir = os.path.dirname(image_path)
+            os.makedirs(output_dir, exist_ok=True)
+            save_path = os.path.join(output_dir, f"{file_name}_pred.png")
+
+        else:
+            output_dir = os.path.join(os.path.dirname(args.folder), "depth_preds")
+            os.makedirs(output_dir, exist_ok=True)
+            save_path = os.path.join(output_dir, f"{file_name}.png")
+
+        if cv2.imwrite(save_path, save_img):
+            # print(f"## Image successfully saved to {save_path}")
+            pass
+        else:
+            print("*** Error *** Image not saved...")
 
     else:
-        output_dir = os.path.join(os.path.dirname(args.folder), "depth_preds")
-        os.makedirs(output_dir, exist_ok=True)
-        save_path = os.path.join(output_dir, f"{file_name}.tiff")
+        if not is_folder:
+            output_dir = os.path.dirname(image_path)
+            os.makedirs(output_dir, exist_ok=True)
+            save_path = os.path.join(output_dir, f"{file_name}_pred.png")
 
-    if cv2.imwrite(save_path, output_img_resized):
-        # print(f"## Image successfully saved to {save_path}")
-        pass
-    else:
-        print("*** Error *** Image not saved...")
+        else:
+            output_dir = os.path.join(os.path.dirname(args.folder), "depth_preds")
+            os.makedirs(output_dir, exist_ok=True)
+            save_path = os.path.join(output_dir, f"{file_name}.tiff")
+
+        if cv2.imwrite(save_path, output_img_resized):
+            # print(f"## Image successfully saved to {save_path}")
+            pass
+        else:
+            print("*** Error *** Image not saved...")
 
     return fps
 

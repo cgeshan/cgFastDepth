@@ -68,6 +68,9 @@ def parse_command():
         "-r", "--run", required=False, action="store_true", help="Specify a run option"
     )
     parser.add_argument(
+        "--rescale", required=False, action="store_true", help="Specify a save option"
+    )
+    parser.add_argument(
         "-i", "--image", type=str, required=False, help="Path to image JPG or PNG."
     )
     parser.add_argument(
